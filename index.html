@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AirCanvas</title>
+  <style>
+        .info-btn {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        background-color: #0078ff;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 16px;
+        font-size: 16px;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .info-btn:hover {
+        background-color: #005fcc;
+        }
+
+        .modal {
+        display: none;
+        position: fixed;
+        z-index: 999;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+        background: #030303;
+        margin: 10% auto;
+        padding: 20px;
+        width: 50%;
+        border-radius: 12px;
+        box-shadow: 0 5px 10px rgba(0,0,0,0.3);
+        animation: fadeIn 0.3s ease;
+        }
+
+        .modal-content h2 {
+        margin-bottom: 10px;
+        }
+        .save-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin-top: 15px;
+        }
+
+        .save-btn {
+        padding: 10px 20px;
+        font-size: 16px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: transform 0.2s ease, background 0.3s;
+        color: white;
+        }
+
+        .save-btn:hover {
+        transform: scale(1.05);
+        }
+
+        .image-btn {
+        background: linear-gradient(135deg, #00c6ff, #0072ff);
+        }
+
+        .pdf-btn {
+        background: linear-gradient(135deg, #ff416c, #ff4b2b);
+        }
+
+    body {
+      background: #111;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      gap: 20px;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+    .panel {
+      text-align: center;
+    }
+    img {
+      border: 2px solid white;
+      border-radius: 10px;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h3>🎥 Camera View</h3>
+    <img id="camera" width="640" height="480" />
+  </div>
+  <div class="panel">
+    <h3>🎨 AirCanvas</h3>
+    <img id="canvas" width="960" height="720" />
+  </div>
+
+  <!-- trying the save buttons -->
+   <div class="save-buttons">
+  <button class="save-btn image-btn" onclick="saveImage()">💾 Save Image</button>
+  <button class="save-btn pdf-btn" onclick="saveCanvas('pdf')">
+    📄 Save PDF
+  </button>
+</div>
+<!-- 🧾 Instructions Button -->
+<button id="instructionsBtn" class="info-btn">ℹ️ Instructions</button>
+
+<!-- 📘 Instructions Dialog -->
+<div id="instructionsModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <h2>🎨 How to Use AirCanvas</h2>
+    <ul>
+      <li>✋ Show your open hand to the camera.</li>
+      <li>👉 Use your index finger to draw on the canvas (you can see the drawing on right panel).</li>
+      <li>🤚 Make a fist to lift the pen.</li>
+      <li>🎨 Tap color buttons to change colors, open hands with your index finger as pointer.</li>
+      <li>🧼 Click “Clear” to reset the canvas, just have your index finger pointed out, rest hand closed.</li>
+      <li>💾 Use “Save Image” or “Save PDF” to download your work (under maintaince).</li>
+      <li>❌ Press “Q” to quit the app (if running locally).</li>
+    </ul>
+  </div>
+</div>
+
+  <script>
+    const video = document.createElement("video");
+    video.autoplay = true;
+
+    navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+      video.srcObject = stream;
+    });
+    async function saveCanvas(type) {
+    const endpoint =
+      type === "image"
+        ? "http://127.0.0.1:5000/save_image"
+        : "http://127.0.0.1:5000/save_pdf";
+
+    const res = await fetch(endpoint);
+    const data = await res.json();
+
+    if (data.file_url) {
+      // trigger download
+      const link = document.createElement("a");
+      link.href = data.file_url;
+      link.download = "";
+      link.click();
+    } else {
+      alert("✅ " + data.status);
+    }
+  }
+    async function sendFrame() {
+      if (video.videoWidth === 0) return requestAnimationFrame(sendFrame);
+
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = video.videoWidth;
+      tempCanvas.height = video.videoHeight;
+      const ctx = tempCanvas.getContext("2d");
+      ctx.drawImage(video, 0, 0);
+
+      const frameData = tempCanvas.toDataURL("image/jpeg");
+      const res = await fetch("http://127.0.0.1:5000/process_frame", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ frame: frameData }),
+      });
+
+      const data = await res.json();
+      if (data.camera_frame && data.canvas_frame) {
+        document.getElementById("camera").src =
+          "data:image/jpeg;base64," + data.camera_frame;
+        document.getElementById("canvas").src =
+          "data:image/jpeg;base64," + data.canvas_frame;
+      }
+
+      requestAnimationFrame(sendFrame);
+    }
+
+    video.onplaying = () => sendFrame();
+    function saveImage() {
+  const canvas = document.getElementById('canvas');
+  const link = document.createElement('a');
+  link.download = 'drawing.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+const modal = document.getElementById("instructionsModal");
+const btn = document.getElementById("instructionsBtn");
+const span = document.getElementsByClassName("close")[0];
+
+btn.onclick = () => (modal.style.display = "block");
+span.onclick = () => (modal.style.display = "none");
+window.onclick = event => {
+  if (event.target === modal) modal.style.display = "none";
+};
+
+    
+  </script>
+</body>
+</html>
